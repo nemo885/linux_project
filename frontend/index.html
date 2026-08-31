@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Todo List</title>
+<style>
+  body { font-family: sans-serif; max-width: 480px; margin: 60px auto; }
+  h1 { font-size: 22px; }
+  #status { font-size: 13px; color: #888; margin-bottom: 16px; }
+  li { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+  li span { flex: 1; }
+  li.done span { text-decoration: line-through; color: #aaa; }
+  input[type=text] { padding: 6px; width: 70%; }
+  button { padding: 6px 10px; cursor: pointer; }
+</style>
+</head>
+<body>
+  <h1>Todo List</h1>
+  <div id="status">проверка соединения с API...</div>
+
+  <input type="text" id="newTodo" placeholder="Новая задача">
+  <button onclick="addTodo()">Добавить</button>
+
+  <ul id="todoList"></ul>
+
+<script>
+  // Если бэкенд крутится на другом хосте/порту — поменяй здесь.
+  const API_URL = "http://192.168.3.72:8000/api";
+
+  async function checkHealth() {
+    try {
+      const res = await fetch(`${API_URL}/health`);
+      const data = await res.json();
+      document.getElementById("status").textContent =
+        `API: ${data.status}, БД: ${data.db}`;
+    } catch (e) {
+      document.getElementById("status").textContent =
+        "Не могу достучаться до API — проверь, запущен ли backend";
+    }
+  }
+
+  async function loadTodos() {
+    const res = await fetch(`${API_URL}/todos`);
+    const todos = await res.json();
+    const list = document.getElementById("todoList");
+    list.innerHTML = "";
+    todos.forEach(todo => {
+      const li = document.createElement("li");
+      li.className = todo.done ? "done" : "";
+      li.innerHTML = `
+        <span>${todo.title}</span>
+        <button onclick="toggleTodo(${todo.id})">✓</button>
+        <button onclick="deleteTodo(${todo.id})">✕</button>
+      `;
+      list.appendChild(li);
+    });
+  }
+
+  async function addTodo() {
+    const input = document.getElementById("newTodo");
+    if (!input.value.trim()) return;
+    await fetch(`${API_URL}/todos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: input.value })
+    });
+    input.value = "";
+    loadTodos();
+  }
+
+  async function toggleTodo(id) {
+    await fetch(`${API_URL}/todos/${id}/toggle`, { method: "PUT" });
+    loadTodos();
+  }
+
+  async function deleteTodo(id) {
+    await fetch(`${API_URL}/todos/${id}`, { method: "DELETE" });
+    loadTodos();
+  }
+
+  checkHealth();
+  loadTodos();
+</script>
+</body>
+</html>
