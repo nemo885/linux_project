@@ -1,0 +1,17 @@
+[Unit]
+Description=Todo App Backend (FastAPI)
+After=postgresql.service
+
+[Service]
+User=devops
+WorkingDirectory=/home/devops/todo-project/backend
+Environment="DB_HOST=localhost"
+Environment="DB_PORT=5432"
+Environment="DB_NAME=tododb"
+Environment="DB_USER=todouser"
+Environment="DB_PASSWORD=todopass"
+ExecStart=/home/devops/todo-project/backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
