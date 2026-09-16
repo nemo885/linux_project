@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Start backend and postgres
+        run: docker compose up -d --build backend postgres
+
+      - name: Wait for postgres healthcheck
+        run: |
+          until [ "$(docker inspect -f '{{.State.Health.Status}}' todo-project-postgres-1)" == "healthy" ]; do
+            echo "Waiting for postgres..."
+            sleep 2
+          done
+
+      - name: Run tests inside backend container
+        run: docker compose exec -T backend pytest
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs backend postgres
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  push-image:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/nemo885/todo-backend:latest
