@@ -1,112 +1,321 @@
-# Todo List — сквозной DevOps-проект
+# Todo List — End-to-End DevOps Project
 
-Простое приложение: **фронтенд (HTML/JS) + бэкенд (FastAPI) + PostgreSQL**.
-Никакого Docker — запускается голыми руками. Дальше этот же проект
-пойдёт в Docker → CI/CD → Ansible → Kubernetes.
+A simple application consisting of a frontend (HTML/JS), backend (FastAPI), and PostgreSQL database.
+
+The project is initially designed to run without Docker. Later, the same project will be extended with Docker → CI/CD → Ansible → Kubernetes.
 
 ---
 
-## Шаг 1 — Поднять PostgreSQL
+## Step 1 — Set Up PostgreSQL
+
+Install PostgreSQL:
 
 ```bash
-# Установить
 sudo apt update
 sudo apt install postgresql postgresql-contrib -y
+```
 
-# Зайти под системным пользователем postgres
+Log in as the `postgres` system user:
+
+```bash
 sudo -u postgres psql
 ```
 
-Дальше внутри psql:
+Inside `psql`:
 
 ```sql
--- Создать пользователя
+-- Create a user
 CREATE USER todouser WITH PASSWORD 'todopass';
 
--- Создать базу
+-- Create a database
 CREATE DATABASE tododb OWNER todouser;
 
--- Выдать права
+-- Grant privileges
 GRANT ALL PRIVILEGES ON DATABASE tododb TO todouser;
 
--- Выйти
+-- Exit
 \q
 ```
 
-**Открыть порт (разрешить подключение с localhost по паролю):**
+### Configure PostgreSQL
 
-Найди файл `pg_hba.conf` (обычно `/etc/postgresql/<версия>/main/pg_hba.conf`) и убедись, что там есть строка:
-```
+Find the `pg_hba.conf` file (usually located at `/etc/postgresql/<version>/main/pg_hba.conf`) and make sure it contains:
+
+```text
 host    all             all             127.0.0.1/32            md5
 ```
 
-И в `postgresql.conf` (там же) проверь, что:
-```
+In `postgresql.conf` (located in the same directory), check that:
+
+```text
 listen_addresses = 'localhost'
 ```
 
-После правки — перезапустить:
+After making the changes, restart PostgreSQL:
+
 ```bash
 sudo systemctl restart postgresql
 ```
 
-Проверить, что порт 5432 слушается:
+Check that PostgreSQL is listening on port `5432`:
+
 ```bash
 ss -tulpn | grep 5432
 ```
 
 ---
 
-## Шаг 2 — Запустить backend
+## Step 2 — Start the Backend
+
+Navigate to the backend directory:
 
 ```bash
 cd backend
+```
+
+Create and activate a virtual environment:
+
+```bash
 python3 -m venv venv
 source venv/bin/activate
+```
+
+Install the required dependencies:
+
+```bash
 pip install -r requirements.txt
+```
 
-# Скопировать пример настроек (можно менять под себя)
+Copy the example environment configuration:
+
+```bash
 cp .env.example .env
+```
 
-# Экспортировать переменные окружения (или используй python-dotenv, если хочешь автоматом)
+You can modify the `.env` file according to your configuration.
+
+Export the environment variables:
+
+```bash
 export $(cat .env | xargs)
+```
 
-# Запустить сервер
+Start the backend server:
+
+```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Проверить, что бэкенд живой и видит базу:
+Check that the backend is running and can connect to the database:
+
 ```bash
 curl http://localhost:8000/api/health
 ```
-Должно вернуть `{"status":"ok","db":"connected"}`.
 
-Если получаешь ошибку подключения — это и есть та самая "практика с проблемами"
-из блока Сети: проверяй `ss -tulpn`, правильность пароля/имени БД в `.env`,
-и что PostgreSQL вообще запущен (`sudo systemctl status postgresql`).
+The expected response is:
+
+```json
+{"status":"ok","db":"connected"}
+```
+
+If you get a database connection error, this is useful practice for troubleshooting network and configuration issues.
+
+Check:
+
+```bash
+ss -tulpn
+```
+
+Make sure the database credentials and database name in `.env` are correct, and verify that PostgreSQL is running:
+
+```bash
+sudo systemctl status postgresql
+```
 
 ---
 
-## Шаг 3 — Запустить frontend
+## Step 3 — Start the Frontend
 
-Никакого сборщика не нужно — это просто статический HTML.
+No build system is required because the frontend is a static HTML application.
+
+Navigate to the frontend directory:
 
 ```bash
 cd frontend
+```
+
+Start a simple HTTP server:
+
+```bash
 python3 -m http.server 3000
 ```
 
-Открой в браузере: **http://localhost:3000**
+Open the application in your browser:
 
-Если фронтенд не видит бэкенд — открой консоль браузера (F12), посмотри на
-ошибки CORS/Connection refused. Это тоже часть практики диагностики.
+```text
+http://localhost:3000
+```
+
+If the frontend cannot connect to the backend, open the browser developer tools (`F12`) and check the console for errors such as CORS or `Connection refused`.
+
+This is also part of the project's troubleshooting practice.
 
 ---
 
-## Что дальше по роадмапу
+## Step 4 — Docker
 
-- Упаковать backend и frontend каждый в свой Dockerfile
-- Прогнать через `docker-compose` вместе с PostgreSQL
-- Настроить Nginx как reverse proxy перед этим всем
-- Собрать CI/CD пайплайн (build → test → deploy)
-- Задеплоить в Kubernetes (Ansible → манифесты → Helm chart)
+The application was containerized using Docker.
+
+### Dockerfile
+
+A Dockerfile was created for the backend application.
+
+The Dockerfile:
+
+* Uses a Python base image
+* Installs the required dependencies
+* Copies the application files into the container
+* Exposes the backend port
+* Starts the FastAPI application with Uvicorn
+
+Build the Docker image:
+
+```bash
+docker build -t todo-backend .
+```
+
+Run the container:
+
+```bash
+docker run -d -p 8000:8000 --name todo-backend todo-backend
+```
+
+Check running containers:
+
+```bash
+docker ps
+```
+
+Check container logs:
+
+```bash
+docker logs todo-backend
+```
+
+### Docker Image Layers and Cache
+
+Docker builds images in layers. Each instruction in the Dockerfile creates a layer.
+
+Docker can reuse previously built layers from the build cache, which makes subsequent builds faster.
+
+To build the image without using the cache:
+
+```bash
+docker build --no-cache -t todo-backend .
+```
+
+Python dependencies are installed using:
+
+```bash
+pip install --no-cache-dir -r requirements.txt
+```
+
+The `--no-cache-dir` option prevents pip from storing downloaded packages inside the Docker image.
+
+### Docker Registry
+
+The Docker image was also pushed to a container registry.
+
+The workflow is:
+
+```text
+Build image
+    ↓
+Tag image
+    ↓
+Login to registry
+    ↓
+Push image
+    ↓
+Pull image on another machine
+    ↓
+Run container
+```
+
+Example:
+
+```bash
+docker tag todo-backend username/todo-backend:latest
+docker push username/todo-backend:latest
+```
+
+The image can then be downloaded on another machine:
+
+```bash
+docker pull username/todo-backend:latest
+```
+
+And started with:
+
+```bash
+docker run -d -p 8000:8000 --name todo-backend username/todo-backend:latest
+```
+
+### Docker Compose
+
+Docker Compose was used to run multiple services together.
+
+The project includes the following services:
+
+* Backend
+* PostgreSQL database
+
+Docker Compose makes it possible to configure and start the application and database together instead of running each container manually.
+
+Start the services:
+
+```bash
+docker compose up -d
+```
+
+Check the services:
+
+```bash
+docker compose ps
+```
+
+View logs:
+
+```bash
+docker compose logs
+```
+
+Stop the services:
+
+```bash
+docker compose down
+```
+
+### Docker Volumes
+
+A Docker volume is used to persist PostgreSQL data.
+
+Without a volume, database data can be lost when the PostgreSQL container is removed.
+
+The volume allows the database data to remain available even when the container is recreated.
+
+### Troubleshooting
+
+During the project, different port conflicts were encountered.
+
+For example, when port `8000` was already being used by another process, the backend port was changed to `8001` instead of stopping the existing application.
+
+The port can be checked with:
+
+```bash
+ss -tulpn | grep 8000
+```
+
+This helped practice real-world troubleshooting of processes, ports, containers, and service configuration.
+
+
