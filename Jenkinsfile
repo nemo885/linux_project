@@ -18,7 +18,7 @@ pipeline {
             steps {
                 sh '''
                     POSTGRES_CONTAINER=$(docker compose ps -q postgres)
-                    until [ "$(docker inspect -f '{{.State.Health.Status}}' $POSTGRES_CONTAINER)" == "healthy" ]; do
+                    until [ "$(docker inspect -f '{{.State.Health.Status}}' $POSTGRES_CONTAINER)" = "healthy" ]; do
                         echo "Waiting for postgres..."
                         sleep 2
                     done
