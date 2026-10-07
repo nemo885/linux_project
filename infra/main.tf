@@ -46,4 +46,14 @@ resource "docker_container" "postgres" {
     name    = docker_network.todo.name
     aliases = ["postgres"]
   }
+
+  healthcheck {
+    test     = ["CMD-SHELL", "pg_isready  -U todouser -d tododb"]
+    interval = "5s"
+    timeout  = "5s"
+    retries  = 5
+ }
+
+
+  wait = true
 }
