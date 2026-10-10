@@ -1,3 +1,4 @@
+
 terraform {
   required_providers {
     docker = {
@@ -28,8 +29,10 @@ resource "docker_image" "postgres" {
 }
 
 resource "docker_container" "postgres" {
-  name  = "postgres"
-  image = docker_image.postgres.image_id
+  name         = "postgres"
+  image        = docker_image.postgres.image_id
+  wait         = true
+  wait_timeout = 60
 
   env = [
     "POSTGRES_DB=tododb",
@@ -52,8 +55,37 @@ resource "docker_container" "postgres" {
     interval = "5s"
     timeout  = "5s"
     retries  = 5
- }
+  }
 
 
-  wait = true
+}
+resource "docker_image" "backend" {
+  name = "todo-backend:latest"
+  build {
+    context = "${path.module}/../backend"
+  }
+}
+
+resource "docker_container" "backend" {
+  name  = "todo-backend"
+  image = docker_image.backend.image_id
+
+  env = [
+    "DB_HOST=postgres",
+    "DB_PORT=5432",
+    "DB_NAME=tododb",
+    "DB_USER=todouser",
+    "DB_PASSWORD=${var.db_password}",
+  ]
+
+  ports {
+    internal = 8000
+    external = 8001
+  }
+
+  networks_advanced {
+    name = docker_network.todo.name
+  }
+
+  depends_on = [docker_container.postgres]
 }
